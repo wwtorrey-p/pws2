@@ -1,0 +1,9 @@
+.pio/
+sdkconfig.esp32s3
+managed_components/
+dependencies.lock
+build.log
+src/generated/
+/certs/
+.vscode/c_cpp_properties.json
+.vscode/launch.json

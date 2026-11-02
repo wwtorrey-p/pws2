@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather Station</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="login" class="overlay" hidden>
+    <form id="loginForm" class="panel-card dialog">
+      <div class="section-label">SIGN IN</div>
+      <label>Password<input id="loginPass" type="password" autocomplete="current-password" required></label>
+      <div id="loginError" class="error" hidden>Wrong password</div>
+      <button class="action-button primary" type="submit">Sign in</button>
+    </form>
+  </div>
+
+  <div class="shell">
+    <header class="topbar">
+      <div class="wrap bar">
+        <div>
+          <div class="title">Weather Station</div>
+          <div class="section-label" id="subtitle">LOCAL TEMPEST DATA</div>
+        </div>
+        <div class="header-status">
+          <span class="connection"><span id="liveDot" class="dot"></span><span id="liveText">NO DATA</span></span>
+          <span class="battery" title="Sensor battery"><span class="battery-meter"><span id="batteryFill" class="battery-fill"></span></span><span id="batteryText">--</span></span>
+          <button class="action-button" id="settingsBtn" aria-label="Settings">Settings</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <div id="banner" class="banner" hidden></div>
+
+      <section class="panel-card status-card">
+        <div class="section-label">CURRENT CONDITIONS <span id="obsAge" class="muted"></span></div>
+        <div class="status-grid" id="status"></div>
+      </section>
+
+      <div class="range-row">
+        <div class="section-label">HISTORY</div>
+        <div class="seg" id="range"></div>
+      </div>
+      <section class="chart-grid" id="charts"></section>
+
+      <footer class="footerbar">
+        <span id="footInfo"></span>
+        <span id="footVer"></span>
+      </footer>
+    </main>
+  </div>
+
+  <div id="settings" class="overlay" hidden>
+    <div class="panel-card dialog wide">
+      <div class="details-header"><span>Settings</span><button class="details-close" id="settingsClose">Close</button></div>
+      <div class="section-label">UNITS</div>
+      <div class="unit-grid" id="units"></div>
+
+      <div class="section-label">PASSWORD</div>
+      <form id="pwForm" class="inline-form">
+        <input id="pwNew" type="password" autocomplete="new-password" placeholder="New password (6+ characters)">
+        <button class="action-button" type="submit">Change</button>
+      </form>
+      <div id="pwMsg" class="muted small"></div>
+
+      <div class="section-label">FIRMWARE UPDATE</div>
+      <div class="inline-form">
+        <input id="fwFile" type="file" accept=".bin">
+        <button class="action-button" id="fwBtn">Upload</button>
+      </div>
+      <div id="fwMsg" class="muted small"></div>
+      <div id="about" class="muted small"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
