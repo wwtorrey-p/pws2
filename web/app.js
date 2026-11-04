@@ -18,6 +18,10 @@ let units = { ...DEFAULT_UNITS, ...JSON.parse(localStorage.getItem('wx.units') |
 let timers = [];
 let rangeHours = Number(localStorage.getItem('wx.range')) || 24;
 let auth = sessionStorage.getItem('wx.auth');
+let username = 'admin';
+if (auth) {
+  try { username = atob(auth).split(':', 1)[0] || username; } catch { auth = null; }
+}
 let rows = [];
 let current = null;
 
@@ -41,6 +45,13 @@ const fmt = (kind, v) => (v == null || isNaN(v) ? '--' : conv[kind] ? conv[kind]
 
 const dirName = deg => DIRS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 
+function encodeCredentials(user, password) {
+  const bytes = new TextEncoder().encode(user + ':' + password);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 // Magnus formula.
 function dewPoint(t, rh) {
   if (!rh || rh <= 0) return null;
@@ -62,15 +73,20 @@ function showLogin() {
   timers.forEach(clearInterval);
   auth = null;
   sessionStorage.removeItem('wx.auth');
+  $('#settings').hidden = true;
+  $('#loginUser').value = username;
+  $('#loginPass').value = '';
+  $('#loginError').hidden = true;
   $('#login').hidden = false;
   $('#loginPass').focus();
 }
 
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
-  auth = btoa('admin:' + $('#loginPass').value);
+  auth = encodeCredentials($('#loginUser').value, $('#loginPass').value);
   const res = await fetch('/api/current', { headers: { Authorization: 'Basic ' + auth } });
   if (res.ok) {
+    username = $('#loginUser').value;
     sessionStorage.setItem('wx.auth', auth);
     $('#login').hidden = true;
     $('#loginError').hidden = true;
@@ -79,6 +95,15 @@ $('#loginForm').addEventListener('submit', async e => {
   } else {
     $('#loginError').hidden = false;
   }
+});
+
+$('#passwordToggle').addEventListener('click', () => {
+  const password = $('#loginPass');
+  const show = password.type === 'password';
+  password.type = show ? 'text' : 'password';
+  $('#passwordToggle').setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  $('#passwordToggle').setAttribute('aria-pressed', String(show));
+  password.focus();
 });
 
 // ---- Current conditions ----
@@ -402,37 +427,83 @@ function renderUnits() {
 
 $('#settingsBtn').addEventListener('click', () => {
   $('#settings').hidden = false;
+  $('#credentialUser').value = username;
   $('#about').textContent = current ? `Firmware ${current.version}, built ${current.built}` : '';
 });
 $('#settingsClose').addEventListener('click', () => { $('#settings').hidden = true; });
+$('#logoutBtn').addEventListener('click', showLogin);
 
-$('#pwForm').addEventListener('submit', async e => {
+$('#credentialsForm').addEventListener('submit', async e => {
   e.preventDefault();
-  const password = $('#pwNew').value;
-  const res = await api('/api/password', { method: 'POST', body: JSON.stringify({ password }) });
-  if (res.ok) {
-    auth = btoa('admin:' + password);
+  const nextUsername = $('#credentialUser').value;
+  const password = $('#credentialPassword').value;
+  try {
+    const res = await api('/api/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: nextUsername, password }),
+    });
+    if (!res.ok) {
+      $('#credentialsMsg').textContent = (await res.text()) || 'Could not change account credentials.';
+      return;
+    }
+    username = nextUsername;
+    auth = encodeCredentials(username, password);
     sessionStorage.setItem('wx.auth', auth);
-    $('#pwNew').value = '';
-    $('#pwMsg').textContent = 'Password changed.';
+    $('#credentialPassword').value = '';
+    $('#credentialsMsg').textContent = 'Account credentials changed.';
     loadCurrent();
-  } else {
-    $('#pwMsg').textContent = (await res.text()) || 'Could not change the password.';
+  } catch (err) {
+    if (err.message !== 'unauthorized') $('#credentialsMsg').textContent = 'Could not change account credentials: ' + err.message;
   }
 });
+
+function uploadFirmware(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', '/api/firmware');
+    request.setRequestHeader('Authorization', 'Basic ' + auth);
+    request.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    });
+    request.addEventListener('load', () => {
+      if (request.status === 401) {
+        showLogin();
+        reject(new Error('unauthorized'));
+        return;
+      }
+      resolve({ ok: request.status >= 200 && request.status < 300, text: request.responseText });
+    });
+    request.addEventListener('error', () => reject(new Error('network error')));
+    request.addEventListener('abort', () => reject(new Error('upload canceled')));
+    request.send(file);
+  });
+}
 
 $('#fwBtn').addEventListener('click', async () => {
   const file = $('#fwFile').files[0];
   const msg = $('#fwMsg');
   if (!file) { msg.textContent = 'Choose a firmware .bin first.'; return; }
-  msg.textContent = 'Uploading ' + Math.round(file.size / 1024) + ' KB. Do not power off...';
+  const progress = $('#fwProgress');
+  const button = $('#fwBtn');
+  progress.value = 0;
+  progress.hidden = false;
+  button.disabled = true;
+  msg.textContent = 'Uploading 0%. Do not power off...';
   try {
-    const res = await api('/api/firmware', { method: 'POST', body: file });
-    if (!res.ok) { msg.textContent = 'Update failed: ' + (await res.text()); return; }
+    const res = await uploadFirmware(file, (loaded, total) => {
+      const percent = Math.floor(loaded / total * 100);
+      progress.value = percent;
+      msg.textContent = `Uploading ${percent}%. Do not power off...`;
+    });
+    if (!res.ok) { msg.textContent = 'Update failed: ' + (res.text || 'server returned an error'); return; }
+    progress.value = 100;
     msg.textContent = 'Installed. The device is restarting; reloading shortly.';
     setTimeout(() => location.reload(), 20000);
   } catch (err) {
-    msg.textContent = 'Upload failed: ' + err.message;
+    if (err.message !== 'unauthorized') msg.textContent = 'Upload failed: ' + err.message;
+  } finally {
+    button.disabled = false;
   }
 });
 

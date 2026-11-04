@@ -44,7 +44,7 @@ The build embeds `certs/server.crt` and `certs/server.key` when both files exist
 | `src/wifi.*` | Wi-Fi station and serial provisioning (from water-pump-monitor) |
 | `src/weather.*` | UDP listener task, current-conditions state, flash history ring |
 | `src/aggregate.*` | Pure logic: averages observations into 5-minute `Sample`s (unit-tested) |
-| `src/auth.*` | Single `admin` account, salted SHA-256, stored in NVS |
+| `src/auth.*` | Configurable single account, salted SHA-256 password, stored in NVS |
 | `src/web.*` | HTTPS server, JSON API, static assets, firmware upload |
 | `src/cert.*` | Embedded local-trust certificate, or self-signed ECDSA certificate generated on first boot and kept in NVS |
 | `src/storage.h` | NVS blob helpers (namespace `wx`) |
@@ -62,11 +62,11 @@ The build embeds `certs/server.crt` and `certs/server.key` when both files exist
 
 If `Sample` changes size or layout, bump the data format, because old records would be misread. The `static_assert` keeps it at 32 bytes so a record never straddles a sector.
 
-### HTTP API (all except static files need HTTP Basic `admin:<password>`)
+### HTTP API (all except static files need HTTP Basic authentication)
 
 - `GET /api/current`: latest observation, live wind, hub RSSI, device info, `defaultPassword` flag.
 - `GET /api/history?hours=N` (1 to 336, default 24): `{"step":300,"rows":[[epoch, temp*100, hum*10, press*10, wind*100, gust*100, dir, rain*100, solar, uv*10, lux, mV, lightning], ...]}`, oldest first, chunked.
-- `POST /api/password` with `{"password": "..."}` (6+ characters, not `admin`).
+- `POST /api/password` with `{"username": "...", "password": "..."}`. Usernames must be 1-32 printable ASCII characters without `:`; passwords must be 6-64 characters and cannot be `admin`. For compatibility, omitting `username` keeps the current username.
 - `POST /api/firmware` with the raw `.bin` as the body. The image is checked against this project's name and the device restarts into it. A new image must be online and serving within 30 s to be confirmed, or it rolls back.
 
 ## Open items

@@ -171,7 +171,19 @@ static esp_err_t postPassword(httpd_req_t* req) {
     Json body = readBody(req);
     cJSON* p = body ? cJSON_GetObjectItem(body.get(), "password") : nullptr;
     if (!cJSON_IsString(p)) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "password required");
-    if (!auth::set(p->valuestring)) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "min 6 chars, not 'admin'");
+    cJSON* u = body ? cJSON_GetObjectItem(body.get(), "username") : nullptr;
+    if (u && !cJSON_IsString(u)) return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "username must be a string");
+    const std::string user = u ? u->valuestring : auth::username();
+    switch (auth::set(user, p->valuestring)) {
+        case auth::SetResult::InvalidUsername:
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "username must be 1-32 printable ASCII characters without ':'");
+        case auth::SetResult::InvalidPassword:
+            return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "password must be 6-64 characters and not 'admin'");
+        case auth::SetResult::StorageError:
+            return sendText(req, "500 Internal Server Error", "could not save credentials");
+        case auth::SetResult::Ok:
+            break;
+    }
     return httpd_resp_send(req, "ok", HTTPD_RESP_USE_STRLEN);
 }
 

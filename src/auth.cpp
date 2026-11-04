@@ -1,5 +1,7 @@
 #include "auth.h"
 
+#include <cstring>
+
 #include "esp_log.h"
 #include "esp_random.h"
 #include "freertos/FreeRTOS.h"
@@ -14,6 +16,9 @@ struct Credentials {
     uint8_t salt[16];
     uint8_t hash[32];
     bool isDefault;
+    // Keep username after the legacy credential blob so it can be prefix-migrated.
+    uint8_t reserved[3];
+    char username[33];
 };
 
 const char* TAG = "auth";
@@ -36,13 +41,25 @@ void make(Credentials& c, const std::string& pass, bool isDefault) {
     c.isDefault = isDefault;
 }
 
+bool validUsername(const std::string& user) {
+    if (user.empty() || user.size() > 32) return false;
+    for (unsigned char c : user) {
+        if (c < 0x20 || c > 0x7e || c == ':') return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 void init() {
     g_lock = xSemaphoreCreateMutex();
-    if (!storage::load("cred", g_cred)) {
+    if (!storage::loadPrefix("cred", g_cred)) {
         make(g_cred, "admin", true);
-        storage::save("cred", g_cred);
+        memcpy(g_cred.username, "admin", sizeof("admin"));
+        if (!storage::save("cred", g_cred)) ESP_LOGE(TAG, "could not save default credentials");
+    } else if (g_cred.username[0] == '\0') {
+        memcpy(g_cred.username, "admin", sizeof("admin"));
+        if (!storage::save("cred", g_cred)) ESP_LOGE(TAG, "could not migrate saved credentials");
     }
 }
 
@@ -53,19 +70,35 @@ bool check(const std::string& user, const std::string& pass) {
     uint8_t h[32];
     hashPassword(c.salt, pass, h);
     // Compare everything without early exit so timing does not reveal how much matched.
-    uint8_t diff = user == "admin" ? 0 : 1;
+    uint8_t diff = user == c.username ? 0 : 1;
     for (int i = 0; i < 32; i++) diff |= h[i] ^ c.hash[i];
     return diff == 0;
 }
 
-bool set(const std::string& pass) {
-    if (pass.size() < 6 || pass == "admin") return false;
+SetResult set(const std::string& user, const std::string& pass) {
+    if (!validUsername(user)) return SetResult::InvalidUsername;
+    if (pass.size() < 6 || pass.size() > 64 || pass == "admin") return SetResult::InvalidPassword;
     xSemaphoreTake(g_lock, portMAX_DELAY);
-    make(g_cred, pass, false);
-    bool ok = storage::save("cred", g_cred);
+    Credentials updated = g_cred;
+    make(updated, pass, false);
+    memset(updated.username, 0, sizeof(updated.username));
+    memcpy(updated.username, user.data(), user.size());
+    bool ok = storage::save("cred", updated);
+    if (ok) g_cred = updated;
     xSemaphoreGive(g_lock);
-    ESP_LOGI(TAG, "password changed");
-    return ok;
+    if (!ok) {
+        ESP_LOGE(TAG, "could not save credentials");
+        return SetResult::StorageError;
+    }
+    ESP_LOGI(TAG, "credentials changed");
+    return SetResult::Ok;
+}
+
+std::string username() {
+    xSemaphoreTake(g_lock, portMAX_DELAY);
+    std::string user(g_cred.username);
+    xSemaphoreGive(g_lock);
+    return user;
 }
 
 bool isDefault() {

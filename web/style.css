@@ -115,8 +115,79 @@ body {
 .details-close { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
 input[type=password], input[type=file] { flex: 1; min-width: 0; padding: 8px 10px; color: var(--ink); background: #081525; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
 .inline-form { display: flex; gap: 8px; }
+.settings-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.settings-form label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font: 11px 'DM Mono', ui-monospace, Consolas, monospace; }
+.settings-form input { width: 100%; min-width: 0; padding: 8px 10px; color: var(--ink); background: #081525; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
+.settings-form input:focus { outline: 1px solid var(--blue); border-color: var(--blue); }
+.settings-form button { align-self: flex-start; }
+.fw-progress { display: block; width: 100%; height: 8px; margin-top: 10px; accent-color: var(--blue); }
+.fw-progress[hidden] { display: none; }
 .unit-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; font-size: 14px; }
 .unit-grid .seg { flex-wrap: wrap; }
+
+#login.overlay { background: #0b1220; }
+.login-dialog {
+  width: min(435px, 100%);
+  padding: 0;
+  gap: 23px;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.login-dialog label {
+  gap: 8px;
+  color: #91a4c2;
+  font: 13px system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.login-dialog input {
+  width: 100%;
+  min-width: 0;
+  height: 46px;
+  padding: 0 14px;
+  color: #f3f6fc;
+  background: #202e45;
+  border: 1px solid #293953;
+  border-radius: 9px;
+  outline: none;
+  font: 14px system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.login-dialog input:focus {
+  border-color: #4b96f8;
+  box-shadow: 0 0 0 1px #4b96f8;
+}
+.password-field { position: relative; display: flex; }
+.password-field input { padding-right: 46px; }
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: 44px;
+  height: 100%;
+  place-items: center;
+  padding: 0;
+  color: #8799b5;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.password-toggle svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.password-toggle:focus-visible { outline: 2px solid #4b96f8; outline-offset: -4px; border-radius: 8px; }
+.login-dialog .error { margin: -12px 0 -12px; }
+.login-submit {
+  height: 49px;
+  margin-top: 9px;
+  color: #071525;
+  background: #4b96f8;
+  border: 0;
+  border-radius: 8px;
+  font: 500 16px system-ui, -apple-system, 'Segoe UI', sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.login-submit:hover { background: #5da2ff; border-color: transparent; }
 
 @media (max-width: 760px) {
   .status-grid { grid-template-columns: repeat(2, 1fr); }

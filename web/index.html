@@ -8,11 +8,18 @@
 </head>
 <body>
   <div id="login" class="overlay" hidden>
-    <form id="loginForm" class="panel-card dialog">
-      <div class="section-label">SIGN IN</div>
-      <label>Password<input id="loginPass" type="password" autocomplete="current-password" required></label>
-      <div id="loginError" class="error" hidden>Wrong password</div>
-      <button class="action-button primary" type="submit">Sign in</button>
+    <form id="loginForm" class="dialog login-dialog">
+      <label>Username<input id="loginUser" type="text" autocomplete="username" value="admin" required></label>
+      <label>Password
+        <span class="password-field">
+          <input id="loginPass" type="password" autocomplete="current-password" required>
+          <button class="password-toggle" id="passwordToggle" type="button" aria-label="Show password" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.4-6 9.5-6 9.5 6 9.5 6-3.4 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+          </button>
+        </span>
+      </label>
+      <div id="loginError" class="error" hidden>Wrong username or password</div>
+      <button class="action-button primary login-submit" type="submit">Sign In</button>
     </form>
   </div>
 
@@ -27,6 +34,7 @@
           <span class="connection"><span id="liveDot" class="dot"></span><span id="liveText">NO DATA</span></span>
           <span class="battery" title="Sensor battery"><span class="battery-meter"><span id="batteryFill" class="battery-fill"></span></span><span id="batteryText">--</span></span>
           <button class="action-button" id="settingsBtn" aria-label="Settings">Settings</button>
+          <button class="action-button" id="logoutBtn">Log out</button>
         </div>
       </div>
     </header>
@@ -58,19 +66,21 @@
       <div class="section-label">UNITS</div>
       <div class="unit-grid" id="units"></div>
 
-      <div class="section-label">PASSWORD</div>
-      <form id="pwForm" class="inline-form">
-        <input id="pwNew" type="password" autocomplete="new-password" placeholder="New password (6+ characters)">
-        <button class="action-button" type="submit">Change</button>
+      <div class="section-label">ACCOUNT</div>
+      <form id="credentialsForm" class="settings-form">
+        <label>Username<input id="credentialUser" type="text" autocomplete="username" maxlength="32" required></label>
+        <label>New password<input id="credentialPassword" type="password" autocomplete="new-password" minlength="6" maxlength="64" required></label>
+        <button class="action-button" type="submit">Save account</button>
       </form>
-      <div id="pwMsg" class="muted small"></div>
+      <div id="credentialsMsg" class="muted small" role="status"></div>
 
       <div class="section-label">FIRMWARE UPDATE</div>
       <div class="inline-form">
         <input id="fwFile" type="file" accept=".bin">
         <button class="action-button" id="fwBtn">Upload</button>
       </div>
-      <div id="fwMsg" class="muted small"></div>
+      <progress id="fwProgress" class="fw-progress" max="100" value="0" aria-label="Firmware upload progress" hidden></progress>
+      <div id="fwMsg" class="muted small" role="status"></div>
       <div id="about" class="muted small"></div>
     </div>
   </div>
