@@ -41,6 +41,48 @@ body {
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .title { font-size: 20px; font-weight: 600; }
 .header-status { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 11px; }
+.menu-wrap { position: relative; }
+.menu-button {
+  display: grid;
+  width: 36px;
+  height: 34px;
+  place-items: center;
+  padding: 5px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.menu-button:hover, .menu-button[aria-expanded="true"] { border-color: var(--blue); color: var(--blue); }
+.menu-button svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.app-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 150px;
+  padding: 5px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+}
+.app-menu[hidden] { display: none; }
+.app-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  text-align: left;
+  font: 12px 'DM Mono', ui-monospace, Consolas, monospace;
+  cursor: pointer;
+}
+.app-menu .divider { margin-top: 5px; border-top: 1px solid var(--line); border-radius: 0 0 3px 3px; }
+.app-menu button:hover, .app-menu button:focus-visible { background: #17486f; outline: none; }
 .connection { display: inline-flex; align-items: center; gap: 7px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #60758e; }
 .dot.live { background: var(--green); box-shadow: 0 0 0 4px rgba(101, 224, 176, .14); }
@@ -109,12 +151,42 @@ body {
 .overlay[hidden] { display: none; }
 .dialog { width: min(360px, 100%); padding: 20px; display: flex; flex-direction: column; gap: 14px; max-height: 90vh; overflow: auto; }
 .dialog.wide { width: min(460px, 100%); gap: 8px; }
+.info-dialog { gap: 12px !important; }
+.info-content table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.info-content th, .info-content td { padding: 7px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+.info-content th { width: 48%; padding-right: 1em; color: var(--muted); font-weight: 400; }
+.info-content td { overflow-wrap: anywhere; }
+.info-section + .info-section { margin-top: 16px; }
+.info-section > .section-label { margin-bottom: 3px; }
 .dialog label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font: 11px 'DM Mono', ui-monospace, Consolas, monospace; }
+.overlay .panel-card { background: #102238; }
 .dialog .section-label { margin-top: 10px; }
+.dialog.wide { gap: 10px; }
+.dialog.wide > .section-label { margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+.dialog.wide > .details-header + .section-label { margin-top: 2px; padding-top: 0; border-top: 0; }
+.dialog .small { margin: 0; }
+.dialog .small:empty { display: none; }
+.unit-grid { font: 12px 'DM Mono', ui-monospace, Consolas, monospace; color: var(--muted); }
+.unit-grid .action-button { min-width: 44px; }
+input[type=file] { font-size: 12px; color: var(--muted); }
+input[type=file]::file-selector-button {
+  margin-right: 10px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 11px 'DM Mono', ui-monospace, Consolas, monospace;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+input[type=file]::file-selector-button:hover { border-color: var(--blue); }
 .details-header { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .details-close { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
 input[type=password], input[type=file] { flex: 1; min-width: 0; padding: 8px 10px; color: var(--ink); background: #081525; border: 1px solid var(--line); border-radius: 4px; font: inherit; }
-.inline-form { display: flex; gap: 8px; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.inline-form input[type=file] { flex: 1 1 200px; }
 .settings-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
 .settings-form label { display: flex; flex-direction: column; gap: 5px; color: var(--muted); font: 11px 'DM Mono', ui-monospace, Consolas, monospace; }
 .settings-form input { width: 100%; min-width: 0; padding: 8px 10px; color: var(--ink); background: #081525; border: 1px solid var(--line); border-radius: 4px; font: inherit; }

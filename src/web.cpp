@@ -13,16 +13,26 @@
 #include "cJSON.h"
 #include "cert.h"
 #include "esp_app_format.h"
+#include "esp_chip_info.h"
 #include "esp_https_server.h"
+#include "esp_flash.h"
+#include "esp_heap_caps.h"
+#include "esp_mac.h"
+#include "esp_netif.h"
+#include "esp_partition.h"
+#include "esp_rom_sys.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
+#include "driver/temperature_sensor.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mbedtls/base64.h"
+#include "nvs.h"
 #include "weather.h"
+#include "wifi.h"
 #include "web_assets.h"
 
 static const char* TAG = "web";
@@ -125,6 +135,122 @@ static esp_err_t getCurrent(httpd_req_t* req) {
     cJSON_AddStringToObject(j, "version", desc->version);
     std::string built = std::string(desc->date) + " " + desc->time;
     cJSON_AddStringToObject(j, "built", built.c_str());
+    return sendJson(req, j);
+}
+
+static std::string ipStr(const esp_ip4_addr_t& a) {
+    char buf[16];
+    snprintf(buf, sizeof buf, IPSTR, IP2STR(&a));
+    return buf;
+}
+
+static esp_err_t getNetwork(httpd_req_t* req) {
+    if (!authorized(req)) return ESP_OK;
+    cJSON* j = cJSON_CreateObject();
+    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t ip = {};
+    const bool up = netif && esp_netif_get_ip_info(netif, &ip) == ESP_OK && ip.ip.addr != 0;
+    cJSON_AddBoolToObject(j, "connected", up);
+    if (up) {
+        cJSON_AddStringToObject(j, "ip", ipStr(ip.ip).c_str());
+        cJSON_AddStringToObject(j, "netmask", ipStr(ip.netmask).c_str());
+        cJSON_AddStringToObject(j, "gateway", ipStr(ip.gw).c_str());
+        esp_netif_dns_info_t dns;
+        if (esp_netif_get_dns_info(netif, ESP_NETIF_DNS_MAIN, &dns) == ESP_OK &&
+            dns.ip.type == ESP_IPADDR_TYPE_V4) {
+            cJSON_AddStringToObject(j, "dns", ipStr(dns.ip.u_addr.ip4).c_str());
+        }
+    }
+    const char* host = nullptr;
+    if (netif && esp_netif_get_hostname(netif, &host) == ESP_OK && host) {
+        cJSON_AddStringToObject(j, "hostname", host);
+    }
+    uint8_t mac[6];
+    if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK) {
+        char m[18];
+        snprintf(m, sizeof m, "%02X:%02X:%02X:%02X:%02X:%02X",
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        cJSON_AddStringToObject(j, "mac", m);
+    }
+    wifi_ap_record_t ap;
+    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        cJSON_AddStringToObject(j, "ssid", (const char*)ap.ssid);
+        cJSON_AddNumberToObject(j, "rssi", ap.rssi);
+        cJSON_AddNumberToObject(j, "channel", ap.primary);
+    }
+    return sendJson(req, j);
+}
+
+static esp_err_t getSystem(httpd_req_t* req) {
+    if (!authorized(req)) return ESP_OK;
+    cJSON* j = cJSON_CreateObject();
+
+    cJSON_AddNumberToObject(j, "uptimeS", (double)uptimeS());
+    const char* reset = "unknown";
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON: reset = "power on"; break;
+        case ESP_RST_EXT: reset = "external pin"; break;
+        case ESP_RST_SW: reset = "software restart"; break;
+        case ESP_RST_PANIC: reset = "crash"; break;
+        case ESP_RST_INT_WDT: reset = "interrupt watchdog"; break;
+        case ESP_RST_TASK_WDT: reset = "task watchdog"; break;
+        case ESP_RST_WDT: reset = "watchdog"; break;
+        case ESP_RST_DEEPSLEEP: reset = "deep sleep"; break;
+        case ESP_RST_BROWNOUT: reset = "brownout"; break;
+        default: break;
+    }
+    cJSON_AddStringToObject(j, "resetReason", reset);
+
+    esp_chip_info_t chip;
+    esp_chip_info(&chip);
+    cJSON_AddStringToObject(j, "chip", chip.model == CHIP_ESP32S3 ? "ESP32-S3" : "ESP32");
+    cJSON_AddNumberToObject(j, "chipRevision", chip.revision);
+    cJSON_AddNumberToObject(j, "cores", chip.cores);
+    cJSON_AddNumberToObject(j, "cpuMHz", esp_rom_get_cpu_ticks_per_us());
+
+    cJSON_AddNumberToObject(j, "heapFree", (double)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    cJSON_AddNumberToObject(j, "heapTotal", (double)heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
+    cJSON_AddNumberToObject(j, "heapMinFree", (double)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
+    cJSON_AddNumberToObject(j, "heapLargestBlock", (double)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    const size_t psramTotal = heap_caps_get_total_size(MALLOC_CAP_SPIRAM);
+    if (psramTotal) {
+        cJSON_AddNumberToObject(j, "psramTotal", (double)psramTotal);
+        cJSON_AddNumberToObject(j, "psramFree", (double)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    }
+    cJSON_AddNumberToObject(j, "httpStackFree", (double)uxTaskGetStackHighWaterMark(nullptr));
+
+    uint32_t flashSize = 0;
+    if (esp_flash_get_size(nullptr, &flashSize) == ESP_OK) {
+        cJSON_AddNumberToObject(j, "flashSize", flashSize);
+    }
+    const esp_partition_t* run = esp_ota_get_running_partition();
+    if (run) {
+        cJSON_AddStringToObject(j, "otaSlot", run->label);
+        cJSON_AddNumberToObject(j, "otaSlotSize", run->size);
+    }
+    const esp_app_desc_t* desc = esp_app_get_description();
+    cJSON_AddStringToObject(j, "version", desc->version);
+    cJSON_AddStringToObject(j, "idfVersion", desc->idf_ver);
+
+    nvs_stats_t ns;
+    if (nvs_get_stats(nullptr, &ns) == ESP_OK) {
+        cJSON_AddNumberToObject(j, "nvsUsed", (double)ns.used_entries);
+        cJSON_AddNumberToObject(j, "nvsTotal", (double)ns.total_entries);
+    }
+
+    temperature_sensor_handle_t ts = nullptr;
+    temperature_sensor_config_t tsCfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
+    if (temperature_sensor_install(&tsCfg, &ts) == ESP_OK) {
+        float c = 0;
+        if (temperature_sensor_enable(ts) == ESP_OK) {
+            if (temperature_sensor_get_celsius(ts, &c) == ESP_OK) cJSON_AddNumberToObject(j, "tempC", c);
+            temperature_sensor_disable(ts);
+        }
+        temperature_sensor_uninstall(ts);
+    }
+
+    cJSON_AddNumberToObject(j, "wifiDisconnects", wifi::disconnectCount());
+    cJSON_AddNumberToObject(j, "wifiLastReason", wifi::lastDisconnectReason());
     return sendJson(req, j);
 }
 
@@ -292,6 +418,8 @@ bool startWebServer() {
 
     const httpd_uri_t routes[] = {
         {"/api/current", HTTP_GET, getCurrent, nullptr},
+        {"/api/network", HTTP_GET, getNetwork, nullptr},
+        {"/api/system", HTTP_GET, getSystem, nullptr},
         {"/api/history", HTTP_GET, getHistory, nullptr},
         {"/api/password", HTTP_POST, postPassword, nullptr},
         {"/api/firmware", HTTP_POST, postFirmware, nullptr},

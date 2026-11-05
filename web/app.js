@@ -16,6 +16,8 @@ const DEFAULT_UNITS = { temp: 'F', wind: 'mph', pressure: 'inHg', rain: 'in' };
 
 let units = { ...DEFAULT_UNITS, ...JSON.parse(localStorage.getItem('wx.units') || '{}') };
 let timers = [];
+let panelTimer = null;
+let activePanel = null;
 let rangeHours = Number(localStorage.getItem('wx.range')) || 24;
 let auth = sessionStorage.getItem('wx.auth');
 let username = 'admin';
@@ -71,9 +73,9 @@ async function api(path, opts = {}) {
 
 function showLogin() {
   timers.forEach(clearInterval);
+  closePanel();
   auth = null;
   sessionStorage.removeItem('wx.auth');
-  $('#settings').hidden = true;
   $('#loginUser').value = username;
   $('#loginPass').value = '';
   $('#loginError').hidden = true;
@@ -425,13 +427,179 @@ function renderUnits() {
   }));
 }
 
-$('#settingsBtn').addEventListener('click', () => {
-  $('#settings').hidden = false;
-  $('#credentialUser').value = username;
-  $('#about').textContent = current ? `Firmware ${current.version}, built ${current.built}` : '';
+function closeMenu() {
+  $('#appMenu').hidden = true;
+  $('#menuBtn').setAttribute('aria-expanded', 'false');
+}
+
+function closePanel() {
+  if (panelTimer) clearInterval(panelTimer);
+  panelTimer = null;
+  activePanel = null;
+  document.querySelectorAll('.overlay:not(#login)').forEach(panel => { panel.hidden = true; });
+}
+
+function renderInfoTable(container, rows) {
+  const table = document.createElement('table');
+  const body = document.createElement('tbody');
+  for (const [label, value] of rows.filter(([, value]) => value != null && value !== '')) {
+    const row = document.createElement('tr');
+    const heading = document.createElement('th');
+    const cell = document.createElement('td');
+    heading.scope = 'row';
+    heading.textContent = label;
+    cell.textContent = String(value);
+    row.append(heading, cell);
+    body.append(row);
+  }
+  table.append(body);
+  container.replaceChildren(table);
+}
+
+function showPanelError(container, error) {
+  container.textContent = error.message === 'unauthorized' ? '' : error.message;
+  container.classList.toggle('error', error.message !== 'unauthorized');
+}
+
+async function loadNetwork() {
+  const content = $('#networkContent');
+  try {
+    const res = await api('/api/network');
+    if (!res.ok) throw new Error((await res.text()) || 'Could not load network information.');
+    const n = await res.json();
+    content.classList.remove('error', 'muted');
+    renderInfoTable(content, [
+      ['Status', n.connected ? 'Connected' : 'Not connected'],
+      ['Wi-Fi network', n.ssid],
+      ['Signal', n.rssi != null ? `${n.rssi} dBm` : null],
+      ['Channel', n.channel],
+      ['IP address', n.ip],
+      ['Subnet mask', n.netmask],
+      ['Gateway', n.gateway],
+      ['DNS', n.dns],
+      ['Hostname', n.hostname],
+      ['MAC address', n.mac],
+    ]);
+  } catch (error) {
+    showPanelError(content, error);
+  }
+}
+
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor(seconds % 86400 / 3600);
+  const minutes = Math.floor(seconds % 3600 / 60);
+  return `${days ? `${days}d ` : ''}${hours}h ${minutes}m`;
+}
+
+const formatKB = bytes => `${(bytes / 1024).toFixed(1)} KB`;
+const formatMB = bytes => `${(bytes / 1048576).toFixed(bytes % 1048576 ? 1 : 0)} MB`;
+
+function renderHardware(s) {
+  const content = $('#hardwareContent');
+  const groups = [
+    ['Chip', [
+      ['Model', `${s.chip} rev ${s.chipRevision}`],
+      ['Cores', s.cores],
+      ['CPU speed', `${s.cpuMHz} MHz`],
+      ['Temperature', s.tempC != null ? `${s.tempC.toFixed(1)} °C (chip die)` : null],
+      ['Uptime', formatUptime(s.uptimeS)],
+      ['Last reset', s.resetReason],
+    ]],
+    ['Memory', [
+      ['Free RAM', `${formatKB(s.heapFree)} of ${formatKB(s.heapTotal)}`],
+      ['Lowest free since boot', formatKB(s.heapMinFree)],
+      ['Largest free block', formatKB(s.heapLargestBlock)],
+      ['PSRAM free', s.psramTotal ? `${formatMB(s.psramFree)} of ${formatMB(s.psramTotal)}` : null],
+      ['Web server stack free', `${formatKB(s.httpStackFree)} (lowest)`],
+    ]],
+    ['Storage and firmware', [
+      ['Flash size', formatMB(s.flashSize)],
+      ['Running slot', s.otaSlot ? `${s.otaSlot} (${formatMB(s.otaSlotSize)})` : null],
+      ['Settings storage', s.nvsTotal ? `${s.nvsUsed} of ${s.nvsTotal} entries used` : null],
+      ['Firmware', s.version],
+      ['ESP-IDF', s.idfVersion],
+    ]],
+    ['Wi-Fi reliability', [
+      ['Disconnects since boot', s.wifiDisconnects],
+      ['Last disconnect reason', s.wifiDisconnects ? s.wifiLastReason : null],
+    ]],
+  ];
+  const sections = groups.map(([title, rows]) => {
+    const section = document.createElement('section');
+    section.className = 'info-section';
+    const heading = document.createElement('div');
+    heading.className = 'section-label';
+    heading.textContent = title;
+    const table = document.createElement('div');
+    renderInfoTable(table, rows);
+    section.append(heading, table);
+    return section;
+  });
+  content.classList.remove('error', 'muted');
+  content.replaceChildren(...sections);
+}
+
+async function loadHardware() {
+  const content = $('#hardwareContent');
+  try {
+    const res = await api('/api/system');
+    if (!res.ok) throw new Error((await res.text()) || 'Could not load hardware information.');
+    renderHardware(await res.json());
+  } catch (error) {
+    showPanelError(content, error);
+  }
+}
+
+function openPanel(name) {
+  closeMenu();
+  closePanel();
+  activePanel = name;
+  const panel = $('#' + name);
+  panel.hidden = false;
+  if (name === 'settings') {
+    $('#credentialUser').value = username;
+    $('#about').textContent = current ? `Firmware ${current.version}, built ${current.built}` : '';
+    return;
+  }
+  const content = $('#' + name + 'Content');
+  content.classList.remove('error');
+  content.classList.add('muted');
+  content.textContent = 'Loading...';
+  const refresh = name === 'network' ? loadNetwork : loadHardware;
+  refresh();
+  panelTimer = setInterval(refresh, 5000);
+}
+
+$('#menuBtn').addEventListener('click', () => {
+  const menu = $('#appMenu');
+  menu.hidden = !menu.hidden;
+  $('#menuBtn').setAttribute('aria-expanded', String(!menu.hidden));
 });
-$('#settingsClose').addEventListener('click', () => { $('#settings').hidden = true; });
-$('#logoutBtn').addEventListener('click', showLogin);
+$('#appMenu').addEventListener('click', e => {
+  const button = e.target.closest('[data-panel]');
+  if (button) openPanel(button.dataset.panel);
+});
+$('#menuWrap').addEventListener('focusout', e => {
+  if (!$('#menuWrap').contains(e.relatedTarget)) closeMenu();
+});
+document.addEventListener('click', e => {
+  if (!$('#menuWrap').contains(e.target)) closeMenu();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeMenu();
+    closePanel();
+  }
+});
+document.querySelectorAll('[data-close-panel]').forEach(button => button.addEventListener('click', closePanel));
+document.querySelectorAll('.overlay:not(#login)').forEach(panel => panel.addEventListener('click', e => {
+  if (e.target === panel) closePanel();
+}));
+$('#logoutBtn').addEventListener('click', () => {
+  closeMenu();
+  showLogin();
+});
 
 $('#credentialsForm').addEventListener('submit', async e => {
   e.preventDefault();

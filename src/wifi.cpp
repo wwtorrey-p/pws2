@@ -30,6 +30,7 @@ struct Saved {
 EventGroupHandle_t g_events;
 volatile bool g_autoReconnect = false;
 volatile int g_lastReason = 0;
+volatile int g_disconnects = 0;
 volatile bool g_provisioning = false;
 bool g_uartReady = false;
 bool g_lastWasCr = false;
@@ -39,6 +40,7 @@ void onEvent(void*, esp_event_base_t base, int32_t id, void* data) {
         if (g_autoReconnect) esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         g_lastReason = static_cast<wifi_event_sta_disconnected_t*>(data)->reason;
+        g_disconnects = g_disconnects + 1;
         xEventGroupClearBits(g_events, kGotIp);
         ESP_LOGW(TAG, "disconnected, reason %d", g_lastReason);
         if (g_autoReconnect) esp_wifi_connect();
@@ -226,6 +228,10 @@ void connectStored() {
 }
 
 bool connected() { return xEventGroupGetBits(g_events) & kGotIp; }
+
+int disconnectCount() { return g_disconnects; }
+
+int lastDisconnectReason() { return g_lastReason; }
 
 bool provisioning() { return g_provisioning; }
 

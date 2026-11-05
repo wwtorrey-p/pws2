@@ -33,8 +33,17 @@
         <div class="header-status">
           <span class="connection"><span id="liveDot" class="dot"></span><span id="liveText">NO DATA</span></span>
           <span class="battery" title="Sensor battery"><span class="battery-meter"><span id="batteryFill" class="battery-fill"></span></span><span id="batteryText">--</span></span>
-          <button class="action-button" id="settingsBtn" aria-label="Settings">Settings</button>
-          <button class="action-button" id="logoutBtn">Log out</button>
+          <div class="menu-wrap" id="menuWrap">
+            <button class="menu-button" id="menuBtn" aria-label="Menu" aria-expanded="false" aria-controls="appMenu">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <nav class="app-menu" id="appMenu" aria-label="Main menu" hidden>
+              <button type="button" data-panel="settings">Settings</button>
+              <button type="button" data-panel="network">Network</button>
+              <button type="button" data-panel="hardware">Hardware</button>
+                            <button type="button" class="divider" id="logoutBtn">Log out</button>
+                          </nav>
+                        </div>
         </div>
       </div>
     </header>
@@ -62,7 +71,7 @@
 
   <div id="settings" class="overlay" hidden>
     <div class="panel-card dialog wide">
-      <div class="details-header"><span>Settings</span><button class="details-close" id="settingsClose">Close</button></div>
+      <div class="details-header"><span>Settings</span><button class="details-close" type="button" data-close-panel>Close</button></div>
       <div class="section-label">UNITS</div>
       <div class="unit-grid" id="units"></div>
 
@@ -83,6 +92,20 @@
       <div id="fwMsg" class="muted small" role="status"></div>
       <div id="about" class="muted small"></div>
     </div>
+  </div>
+
+  <div id="network" class="overlay" hidden>
+    <section class="panel-card dialog wide info-dialog">
+      <div class="details-header"><span>Network</span><button class="details-close" type="button" data-close-panel>Close</button></div>
+      <div id="networkContent" class="info-content muted">Loading...</div>
+    </section>
+  </div>
+
+  <div id="hardware" class="overlay" hidden>
+    <section class="panel-card dialog wide info-dialog">
+      <div class="details-header"><span>Hardware</span><button class="details-close" type="button" data-close-panel>Close</button></div>
+      <div id="hardwareContent" class="info-content muted">Loading...</div>
+    </section>
   </div>
 
   <script src="/app.js"></script>
